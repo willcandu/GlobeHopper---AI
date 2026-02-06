@@ -34,13 +34,13 @@ const App: React.FC = () => {
         const savedState = localStorage.getItem('globehopper_data_react');
         if (savedState) {
           const data = JSON.parse(savedState);
-          setTripDetails(data.tripDetails);
-          setUserNotes(data.userNotes);
-          setItinerary(data.itinerary);
-          setAccommodations(data.accommodations);
-          setLedger(data.ledger);
-          setShoppingList(data.shoppingList);
-          setAiMarkdown(data.aiMarkdown);
+          setTripDetails(data.tripDetails || tripDetails);
+          setUserNotes(data.userNotes || userNotes);
+          setItinerary(data.itinerary || []);
+          setAccommodations(data.accommodations || {});
+          setLedger(data.ledger || []);
+          setShoppingList(data.shoppingList || []);
+          setAiMarkdown(data.aiMarkdown || '');
           setSources(data.sources || []);
         }
       } catch (error) {
@@ -74,18 +74,21 @@ const App: React.FC = () => {
             alert("Please fill in dates and at least one destination.");
             return;
         }
+
         setIsLoading(true);
         try {
             const result = await generateItineraryPlan(tripDetails, userNotes);
-            if (result) {
+            if (result && result.markdown) {
                 setAiMarkdown(result.markdown);
                 setItinerary(result.events);
                 setSources(result.sources);
                 setActiveTab('ai-suggestions');
+            } else {
+                throw new Error("The AI generated an empty itinerary. Please try again with more details.");
             }
         } catch (error: any) {
-            console.error(error);
-            alert(error.message || `Failed to generate itinerary. Check console for details.`);
+            console.error("Generation failed:", error);
+            alert(error.message || "Failed to generate itinerary. Check console for details.");
         } finally {
             setIsLoading(false);
         }

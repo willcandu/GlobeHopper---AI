@@ -9,31 +9,33 @@ export interface GenerationResult {
 
 /**
  * Generates a travel itinerary using gemini-3-flash-preview.
- * This model has higher rate limits for the free tier than the Pro version.
+ * We've removed tools like 'googleSearch' because they often trigger 429 Quota errors 
+ * on free tier accounts even if general text usage is low.
  */
 export async function generateItineraryPlan(details: TripDetails, notes: string): Promise<GenerationResult> {
     const apiKey = process.env.API_KEY;
     
-    if (!apiKey || apiKey.includes('YOUR_ACTUAL_KEY') || apiKey.length < 10) {
-        throw new Error("API Key is missing or invalid. Please check your .env.local file.");
+    // Safety check for the API key in the browser environment
+    if (!apiKey || apiKey === "" || apiKey.includes("your_actual_key")) {
+        throw new Error("API Key is missing. Make sure your .env.local file has 'API_KEY=...' and you have restarted the 'npm run dev' server.");
     }
 
     const ai = new GoogleGenAI({ apiKey });
     const destinations = details.destinations.map(d => d.name).join(', ');
     
-    const prompt = `Generate a comprehensive travel plan for ${destinations} from ${details.startDate} to ${details.endDate}.
-        User's starting point: ${details.origin}.
+    const prompt = `Generate a detailed 5-day travel itinerary for ${destinations} starting from ${details.startDate} and ending on ${details.endDate}.
+        Origin: ${details.origin}.
         Preferences: "${notes}".
         
-        IMPORTANT: Your response MUST be a single JSON object with the following structure:
+        You MUST return the response as a JSON object with this exact structure:
         {
-          "markdown": "A detailed travel guide in Markdown format.",
+          "markdown": "A beautiful, long-form travel guide in Markdown with headers, bullet points, and tips.",
           "events": [
             {
               "date": "YYYY-MM-DD",
               "time": "HH:MM",
-              "activity": "Activity name",
-              "location": "Specific location",
+              "activity": "Name of the activity",
+              "location": "Specific location/address",
               "lat": 0.0,
               "lon": 0.0,
               "mapLink": "Google Maps URL"
@@ -46,33 +48,38 @@ export async function generateItineraryPlan(details: TripDetails, notes: string)
             model: 'gemini-3-flash-preview',
             contents: prompt,
             config: {
-                systemInstruction: "You are an elite travel concierge. Always provide high-quality, efficient travel advice. You must return only valid JSON.",
-                tools: [{ googleSearch: {} }],
-                responseMimeType: "application/json"
+                systemInstruction: "You are an expert travel planner. You provide high-quality, practical itineraries. Output ONLY valid JSON.",
+                responseMimeType: "application/json",
+                temperature: 0.7
             }
         });
 
         const text = response.text || '';
         const parsed = JSON.parse(text);
         
-        const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
-        const sources = groundingChunks
-            .filter(chunk => chunk.web)
-            .map(chunk => ({
-                title: chunk.web?.title || 'Source',
-                uri: chunk.web?.uri || ''
-            }));
-
+        // Since we removed googleSearch, sources will be empty, 
+        // but we keep the structure for compatibility.
         return {
             markdown: parsed.markdown || '',
-            events: parsed.events || [],
-            sources: sources
+            events: (parsed.events || []).map((ev: any) => ({
+                ...ev,
+                // Ensure coordinates are numbers
+                lat: parseFloat(ev.lat) || 0,
+                lon: parseFloat(ev.lon) || 0
+            })),
+            sources: []
         };
     } catch (error: any) {
-        console.error("Gemini Generation Error:", error);
+        console.error("Gemini API Error Detail:", error);
+        
         if (error.message?.includes('429')) {
-            throw new Error("Quota exceeded. The free tier has limits on how many requests you can make per minute. Please wait 60 seconds and try again.");
+            throw new Error("Quota exceeded. Please wait 1 minute. This often happens on the free tier if multiple requests are sent too quickly.");
         }
-        throw error;
+        
+        if (error instanceof SyntaxError) {
+            throw new Error("The AI returned an invalid response format. Please try again.");
+        }
+
+        throw new Error(error.message || "An unexpected error occurred while generating the itinerary.");
     }
 }
