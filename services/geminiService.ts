@@ -11,15 +11,16 @@ export interface GenerationResult {
 /**
  * Generates a travel itinerary using gemini-3-flash-preview.
  */
-export async function generateItineraryPlan(details: TripDetails, notes: string): Promise<GenerationResult> {
-    const apiKey = process.env.API_KEY;
+export async function generateItineraryPlan(
+    details: TripDetails, 
+    notes: string, 
+    apiKey: string
+): Promise<GenerationResult> {
     
-    // Safety check for the API key in the browser environment
-    if (!apiKey || apiKey === "" || apiKey.includes("your_actual_key")) {
-        throw new Error("API Key is missing. Please connect your Gemini API key using the setup button.");
+    if (!apiKey || apiKey === "") {
+        throw new Error("API Key is missing.");
     }
 
-    // Always create a new instance right before the call to ensure latest key from process.env is used
     const ai = new GoogleGenAI({ apiKey });
     const destinations = details.destinations.map(d => d.name).join(', ');
     
@@ -69,19 +70,14 @@ export async function generateItineraryPlan(details: TripDetails, notes: string)
     } catch (error: any) {
         console.error("Gemini API Error Detail:", error);
         
-        // Handle specific error per guidelines: Reset key selection if entity not found
-        if (error.message?.includes("Requested entity was not found")) {
-            throw new Error("Requested entity was not found. Your selected API key might be invalid or restricted. Please re-select a valid API key.");
+        if (error.message?.includes("API_KEY_INVALID") || error.message?.includes("403")) {
+            throw new Error("API_KEY_INVALID");
         }
         
         if (error.message?.includes('429')) {
-            throw new Error("Quota exceeded. Please wait 1 minute. This often happens on the free tier if multiple requests are sent too quickly.");
+            throw new Error("Quota exceeded. Please wait 1 minute.");
         }
         
-        if (error instanceof SyntaxError) {
-            throw new Error("The AI returned an invalid response format. Please try again.");
-        }
-
-        throw new Error(error.message || "An unexpected error occurred while generating the itinerary.");
+        throw new Error(error.message || "An unexpected error occurred.");
     }
 }

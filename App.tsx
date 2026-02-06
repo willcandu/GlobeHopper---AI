@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import type { Tab, TripDetails, ItineraryItem, Accommodation, LedgerEntry, ShoppingItem } from './types';
 import { TABS } from './constants';
@@ -14,7 +15,7 @@ import { generateItineraryPlan } from './services/geminiService';
 const App: React.FC = () => {
     const [activeTab, setActiveTab] = useState<Tab>('home');
     const [isLoading, setIsLoading] = useState(false);
-    const [isApiKeySet, setIsApiKeySet] = useState(false);
+    const [apiKey, setApiKey] = useState<string | null>(null);
     
     const [tripDetails, setTripDetails] = useState<TripDetails>({
         origin: 'San Francisco',
@@ -32,44 +33,24 @@ const App: React.FC = () => {
     const [aiMarkdown, setAiMarkdown] = useState<string>('');
     const [sources, setSources] = useState<{title: string, uri: string}[]>([]);
 
+    // Initialize API key from storage or process.env
     useEffect(() => {
-        const checkKey = async () => {
-            // Priority 1: Check if API_KEY is provided via local environment (.env.local)
-            // Vite injects this during build/dev
-            const envKey = process.env.API_KEY;
-            if (envKey && envKey !== "" && !envKey.includes("your_gemini_api_key")) {
-                setIsApiKeySet(true);
-                return;
-            }
-
-            // Priority 2: Check for AI Studio managed key selection
-            try {
-                // @ts-ignore
-                if (window.aistudio && typeof window.aistudio.hasSelectedApiKey === 'function') {
-                    // @ts-ignore
-                    const hasKey = await window.aistudio.hasSelectedApiKey();
-                    setIsApiKeySet(hasKey);
-                }
-            } catch (e) {
-                console.debug("AI Studio key check skipped (standard browser environment)");
-            }
-        };
-        checkKey();
+        const storedKey = localStorage.getItem('globehopper_api_key');
+        if (storedKey) {
+            setApiKey(storedKey);
+        } else if (process.env.API_KEY && !process.env.API_KEY.includes("your_gemini")) {
+            setApiKey(process.env.API_KEY);
+        }
     }, []);
 
-    const handleConnectKey = async () => {
-        try {
-            // @ts-ignore
-            if (window.aistudio && typeof window.aistudio.openSelectKey === 'function') {
-                // @ts-ignore
-                await window.aistudio.openSelectKey();
-                setIsApiKeySet(true);
-            } else {
-                alert("This connection dialog is managed by Google AI Studio. For local development (localhost), please add your API_KEY to your .env.local file and restart your server.");
-            }
-        } catch (e) {
-            console.error("Failed to open key selector:", e);
-        }
+    const handleKeySubmit = (key: string) => {
+        setApiKey(key);
+        localStorage.setItem('globehopper_api_key', key);
+    };
+
+    const handleResetKey = () => {
+        setApiKey(null);
+        localStorage.removeItem('globehopper_api_key');
     };
 
     const loadState = () => {
@@ -113,6 +94,7 @@ const App: React.FC = () => {
     useEffect(() => { saveState(); }, [saveState]);
 
     const handleGenerateItinerary = async () => {
+        if (!apiKey) return;
         if (!tripDetails.startDate || !tripDetails.endDate || !tripDetails.destinations[0]?.name) {
             alert("Please fill in dates and at least one destination.");
             return;
@@ -120,22 +102,22 @@ const App: React.FC = () => {
 
         setIsLoading(true);
         try {
-            const result = await generateItineraryPlan(tripDetails, userNotes);
+            const result = await generateItineraryPlan(tripDetails, userNotes, apiKey);
             if (result && result.markdown) {
                 setAiMarkdown(result.markdown);
                 setItinerary(result.events);
                 setSources(result.sources);
                 setActiveTab('ai-suggestions');
             } else {
-                throw new Error("The AI generated an empty itinerary. Please try again with more details.");
+                throw new Error("The AI generated an empty itinerary.");
             }
         } catch (error: any) {
             console.error("Generation failed:", error);
-            if (error.message?.includes("Requested entity was not found")) {
-                setIsApiKeySet(false);
-                alert("API connection failed. Please re-connect your Gemini API key.");
+            if (error.message?.includes("API_KEY_INVALID") || error.message?.includes("key not found")) {
+                handleResetKey();
+                alert("The API key provided is invalid. Please enter a correct key.");
             } else {
-                alert(error.message || "Failed to generate itinerary. Check console for details.");
+                alert(error.message || "Failed to generate itinerary.");
             }
         } finally {
             setIsLoading(false);
@@ -152,8 +134,8 @@ const App: React.FC = () => {
                           setUserNotes={setUserNotes}
                           onGenerate={handleGenerateItinerary}
                           isLoading={isLoading}
-                          isApiKeySet={isApiKeySet}
-                          onConnectKey={handleConnectKey}
+                          isApiKeySet={!!apiKey}
+                          onConnectKey={handleResetKey}
                           />;
             case 'ai-suggestions':
                 return <SuggestionsTab markdown={aiMarkdown} sources={sources} onBackToHome={() => setActiveTab('home')} />;
@@ -173,11 +155,11 @@ const App: React.FC = () => {
             default:
                 return null;
         }
-    }, [activeTab, tripDetails, userNotes, isLoading, aiMarkdown, itinerary, accommodations, ledger, shoppingList, sources, isApiKeySet]);
+    }, [activeTab, tripDetails, userNotes, isLoading, aiMarkdown, itinerary, accommodations, ledger, shoppingList, sources, apiKey]);
 
     return (
         <div className="min-h-screen flex flex-col max-w-md mx-auto bg-[#FDFBF7]">
-            {!isApiKeySet && <ApiKeyGate onConnect={handleConnectKey} />}
+            {!apiKey && <ApiKeyGate onSubmit={handleKeySubmit} />}
             <Header activeTab={activeTab} tripDetails={tripDetails} />
             <main className="px-6 flex-grow pb-24">
                 {tabContent}
