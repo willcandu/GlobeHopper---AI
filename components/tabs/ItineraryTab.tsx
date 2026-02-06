@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect } from 'react';
 import type { TripDetails, ItineraryItem, Accommodation } from '../../types';
 import DailyMap from '../DailyMap';
@@ -55,18 +54,26 @@ const ItineraryTab: React.FC<ItineraryTabProps> = ({ tripDetails, itinerary, acc
     }, [accommodations, selectedDate]);
 
      const googleMapsLink = useMemo(() => {
-        const itemsForLink = filteredItinerary;
+        const itemsForLink = [...filteredItinerary];
         if (itemsForLink.length === 0 && !currentAccommodation) return null;
         
         const waypoints = itemsForLink.map(i => `${i.lat},${i.lon}`);
-        const origin = currentAccommodation ? `${currentAccommodation.lat},${currentAccommodation.lon}` : waypoints.shift();
-        const destination = waypoints.pop() || origin;
+        
+        // Ensure origin is a string
+        const origin = currentAccommodation 
+            ? `${currentAccommodation.lat},${currentAccommodation.lon}` 
+            : waypoints.shift();
 
+        // Narrow type to string or return null if we have no start point
         if (!origin) return null;
+
+        // Now that origin is guaranteed string, destination is also guaranteed string
+        const destination = waypoints.pop() || origin;
 
         const url = new URL("https://www.google.com/maps/dir/?api=1");
         url.searchParams.append('origin', origin);
         url.searchParams.append('destination', destination);
+        
         if (waypoints.length > 0) {
             url.searchParams.append('waypoints', waypoints.join('|'));
         }
