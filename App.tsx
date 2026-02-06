@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import type { Tab, TripDetails, ItineraryItem, Accommodation, LedgerEntry, ShoppingItem } from './types';
 import { TABS } from './constants';
@@ -35,17 +34,42 @@ const App: React.FC = () => {
 
     useEffect(() => {
         const checkKey = async () => {
-            // @ts-ignore
-            const hasKey = await window.aistudio.hasSelectedApiKey();
-            setIsApiKeySet(hasKey);
+            // Priority 1: Check if API_KEY is provided via local environment (.env.local)
+            // Vite injects this during build/dev
+            const envKey = process.env.API_KEY;
+            if (envKey && envKey !== "" && !envKey.includes("your_gemini_api_key")) {
+                setIsApiKeySet(true);
+                return;
+            }
+
+            // Priority 2: Check for AI Studio managed key selection
+            try {
+                // @ts-ignore
+                if (window.aistudio && typeof window.aistudio.hasSelectedApiKey === 'function') {
+                    // @ts-ignore
+                    const hasKey = await window.aistudio.hasSelectedApiKey();
+                    setIsApiKeySet(hasKey);
+                }
+            } catch (e) {
+                console.debug("AI Studio key check skipped (standard browser environment)");
+            }
         };
         checkKey();
     }, []);
 
     const handleConnectKey = async () => {
-        // @ts-ignore
-        await window.aistudio.openSelectKey();
-        setIsApiKeySet(true);
+        try {
+            // @ts-ignore
+            if (window.aistudio && typeof window.aistudio.openSelectKey === 'function') {
+                // @ts-ignore
+                await window.aistudio.openSelectKey();
+                setIsApiKeySet(true);
+            } else {
+                alert("This connection dialog is managed by Google AI Studio. For local development (localhost), please add your API_KEY to your .env.local file and restart your server.");
+            }
+        } catch (e) {
+            console.error("Failed to open key selector:", e);
+        }
     };
 
     const loadState = () => {

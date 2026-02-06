@@ -1,4 +1,3 @@
-
 import React from 'react';
 import SparklesIcon from './icons/SparklesIcon';
 import ExternalLinkIcon from './icons/ExternalLinkIcon';
@@ -17,9 +16,16 @@ const ApiKeyGate: React.FC<ApiKeyGateProps> = ({ onConnect }) => {
             
             <h1 className="text-3xl font-black text-stone-800 italic mb-4">GlobeHopper <span className="not-italic font-light">AI</span></h1>
             
-            <p className="text-stone-500 text-sm leading-relaxed max-w-xs mb-10">
-                To generate your personalized Nordic-inspired itineraries, please connect your Gemini API key from a paid project.
+            <p className="text-stone-500 text-sm leading-relaxed max-w-xs mb-6">
+                Connect your Gemini API key to unlock personalized travel intelligence.
             </p>
+            
+            <div className="bg-stone-50 border border-stone-200 rounded-2xl p-4 mb-8 text-left max-w-xs">
+                <p className="text-[10px] font-bold text-stone-400 uppercase tracking-widest mb-2">Local Development</p>
+                <p className="text-[11px] text-stone-500 leading-tight">
+                    If running on <code className="bg-stone-200 px-1 rounded text-stone-700">localhost</code>, add your key to a <code className="bg-stone-200 px-1 rounded text-stone-700">.env.local</code> file as <code className="bg-stone-200 px-1 rounded text-stone-700">API_KEY=your_key</code> and restart your server.
+                </p>
+            </div>
             
             <div className="w-full max-w-xs space-y-4">
                 <button 
@@ -41,7 +47,7 @@ const ApiKeyGate: React.FC<ApiKeyGateProps> = ({ onConnect }) => {
             </div>
             
             <p className="absolute bottom-12 text-[10px] text-stone-300 uppercase tracking-[0.2em] font-bold">
-                Securely handled by Google AI Studio
+                Nordic Precision • AI Travel Intelligence
             </p>
         </div>
     );
