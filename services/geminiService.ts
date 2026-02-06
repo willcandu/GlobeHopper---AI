@@ -1,3 +1,4 @@
+
 import { GoogleGenAI } from "@google/genai";
 import type { TripDetails, ItineraryItem } from "../types";
 
@@ -9,17 +10,16 @@ export interface GenerationResult {
 
 /**
  * Generates a travel itinerary using gemini-3-flash-preview.
- * We've removed tools like 'googleSearch' because they often trigger 429 Quota errors 
- * on free tier accounts even if general text usage is low.
  */
 export async function generateItineraryPlan(details: TripDetails, notes: string): Promise<GenerationResult> {
     const apiKey = process.env.API_KEY;
     
     // Safety check for the API key in the browser environment
     if (!apiKey || apiKey === "" || apiKey.includes("your_actual_key")) {
-        throw new Error("API Key is missing. Make sure your .env.local file has 'API_KEY=...' and you have restarted the 'npm run dev' server.");
+        throw new Error("API Key is missing. Please connect your Gemini API key using the setup button.");
     }
 
+    // Always create a new instance right before the call to ensure latest key from process.env is used
     const ai = new GoogleGenAI({ apiKey });
     const destinations = details.destinations.map(d => d.name).join(', ');
     
@@ -57,13 +57,10 @@ export async function generateItineraryPlan(details: TripDetails, notes: string)
         const text = response.text || '';
         const parsed = JSON.parse(text);
         
-        // Since we removed googleSearch, sources will be empty, 
-        // but we keep the structure for compatibility.
         return {
             markdown: parsed.markdown || '',
             events: (parsed.events || []).map((ev: any) => ({
                 ...ev,
-                // Ensure coordinates are numbers
                 lat: parseFloat(ev.lat) || 0,
                 lon: parseFloat(ev.lon) || 0
             })),
@@ -71,6 +68,11 @@ export async function generateItineraryPlan(details: TripDetails, notes: string)
         };
     } catch (error: any) {
         console.error("Gemini API Error Detail:", error);
+        
+        // Handle specific error per guidelines: Reset key selection if entity not found
+        if (error.message?.includes("Requested entity was not found")) {
+            throw new Error("Requested entity was not found. Your selected API key might be invalid or restricted. Please re-select a valid API key.");
+        }
         
         if (error.message?.includes('429')) {
             throw new Error("Quota exceeded. Please wait 1 minute. This often happens on the free tier if multiple requests are sent too quickly.");

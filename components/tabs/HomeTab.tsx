@@ -7,6 +7,7 @@ import TrashIcon from '../icons/TrashIcon';
 import SparklesIcon from '../icons/SparklesIcon';
 import SpinnerIcon from '../icons/SpinnerIcon';
 import MapPinIcon from '../icons/MapPinIcon';
+import CheckIcon from '../icons/CheckIcon';
 
 interface HomeTabProps {
     tripDetails: TripDetails;
@@ -15,6 +16,8 @@ interface HomeTabProps {
     setUserNotes: React.Dispatch<React.SetStateAction<string>>;
     onGenerate: () => void;
     isLoading: boolean;
+    isApiKeySet: boolean;
+    onConnectKey: () => void;
 }
 
 const LOADING_MESSAGES = [
@@ -26,7 +29,16 @@ const LOADING_MESSAGES = [
     "Packing your virtual bags..."
 ];
 
-const HomeTab: React.FC<HomeTabProps> = ({ tripDetails, setTripDetails, userNotes, setUserNotes, onGenerate, isLoading }) => {
+const HomeTab: React.FC<HomeTabProps> = ({ 
+    tripDetails, 
+    setTripDetails, 
+    userNotes, 
+    setUserNotes, 
+    onGenerate, 
+    isLoading,
+    isApiKeySet,
+    onConnectKey
+}) => {
     const [messageIndex, setMessageIndex] = useState(0);
 
     useEffect(() => {
@@ -66,6 +78,27 @@ const HomeTab: React.FC<HomeTabProps> = ({ tripDetails, setTripDetails, userNote
 
     return (
         <div className="space-y-8 animate-in fade-in duration-500 pb-10">
+            {/* API Status Card */}
+            <div className="bg-white border border-stone-200 rounded-3xl p-5 shadow-sm flex items-center justify-between group">
+                <div className="flex items-center gap-4">
+                    <div className={`w-10 h-10 rounded-2xl flex items-center justify-center transition-colors ${isApiKeySet ? 'bg-green-50 text-green-600' : 'bg-amber-50 text-amber-600'}`}>
+                        {isApiKeySet ? <CheckIcon className="w-5 h-5" /> : <SparklesIcon className="w-5 h-5" />}
+                    </div>
+                    <div>
+                        <h4 className="text-sm font-bold text-stone-800">Gemini AI Session</h4>
+                        <p className="text-[10px] uppercase font-black tracking-widest text-stone-400">
+                            {isApiKeySet ? 'Connected & Ready' : 'Key Required'}
+                        </p>
+                    </div>
+                </div>
+                <button 
+                    onClick={onConnectKey}
+                    className="text-[10px] font-black uppercase tracking-widest text-[#D4A373] hover:underline px-3 py-2"
+                >
+                    {isApiKeySet ? 'Update Key' : 'Connect'}
+                </button>
+            </div>
+
             {/* Status Card */}
             {destinationDisplay && !isLoading && (
                 <div className="bg-gradient-to-br from-stone-800 to-stone-900 text-white p-6 rounded-[2.5rem] shadow-xl relative overflow-hidden group">

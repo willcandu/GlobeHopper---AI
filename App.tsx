@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import type { Tab, TripDetails, ItineraryItem, Accommodation, LedgerEntry, ShoppingItem } from './types';
 import { TABS } from './constants';
@@ -8,11 +9,14 @@ import SuggestionsTab from './components/tabs/SuggestionsTab';
 import ItineraryTab from './components/tabs/ItineraryTab';
 import LedgerTab from './components/tabs/LedgerTab';
 import ShoppingTab from './components/tabs/ShoppingTab';
+import ApiKeyGate from './components/ApiKeyGate';
 import { generateItineraryPlan } from './services/geminiService';
 
 const App: React.FC = () => {
     const [activeTab, setActiveTab] = useState<Tab>('home');
     const [isLoading, setIsLoading] = useState(false);
+    const [isApiKeySet, setIsApiKeySet] = useState(false);
+    
     const [tripDetails, setTripDetails] = useState<TripDetails>({
         origin: 'San Francisco',
         destinations: [{ name: 'Copenhagen' }],
@@ -28,6 +32,21 @@ const App: React.FC = () => {
     const [shoppingList, setShoppingList] = useState<ShoppingItem[]>([]);
     const [aiMarkdown, setAiMarkdown] = useState<string>('');
     const [sources, setSources] = useState<{title: string, uri: string}[]>([]);
+
+    useEffect(() => {
+        const checkKey = async () => {
+            // @ts-ignore
+            const hasKey = await window.aistudio.hasSelectedApiKey();
+            setIsApiKeySet(hasKey);
+        };
+        checkKey();
+    }, []);
+
+    const handleConnectKey = async () => {
+        // @ts-ignore
+        await window.aistudio.openSelectKey();
+        setIsApiKeySet(true);
+    };
 
     const loadState = () => {
       try {
@@ -88,7 +107,12 @@ const App: React.FC = () => {
             }
         } catch (error: any) {
             console.error("Generation failed:", error);
-            alert(error.message || "Failed to generate itinerary. Check console for details.");
+            if (error.message?.includes("Requested entity was not found")) {
+                setIsApiKeySet(false);
+                alert("API connection failed. Please re-connect your Gemini API key.");
+            } else {
+                alert(error.message || "Failed to generate itinerary. Check console for details.");
+            }
         } finally {
             setIsLoading(false);
         }
@@ -104,6 +128,8 @@ const App: React.FC = () => {
                           setUserNotes={setUserNotes}
                           onGenerate={handleGenerateItinerary}
                           isLoading={isLoading}
+                          isApiKeySet={isApiKeySet}
+                          onConnectKey={handleConnectKey}
                           />;
             case 'ai-suggestions':
                 return <SuggestionsTab markdown={aiMarkdown} sources={sources} onBackToHome={() => setActiveTab('home')} />;
@@ -123,10 +149,11 @@ const App: React.FC = () => {
             default:
                 return null;
         }
-    }, [activeTab, tripDetails, userNotes, isLoading, aiMarkdown, itinerary, accommodations, ledger, shoppingList, sources]);
+    }, [activeTab, tripDetails, userNotes, isLoading, aiMarkdown, itinerary, accommodations, ledger, shoppingList, sources, isApiKeySet]);
 
     return (
         <div className="min-h-screen flex flex-col max-w-md mx-auto bg-[#FDFBF7]">
+            {!isApiKeySet && <ApiKeyGate onConnect={handleConnectKey} />}
             <Header activeTab={activeTab} tripDetails={tripDetails} />
             <main className="px-6 flex-grow pb-24">
                 {tabContent}
