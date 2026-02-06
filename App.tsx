@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import type { Tab, TripDetails, ItineraryItem, Accommodation, LedgerEntry, ShoppingItem } from './types';
 import { TABS } from './constants';
@@ -84,9 +83,9 @@ const App: React.FC = () => {
                 setSources(result.sources);
                 setActiveTab('ai-suggestions');
             }
-        } catch (error) {
+        } catch (error: any) {
             console.error(error);
-            alert(`Failed to generate itinerary. Check console for details.`);
+            alert(error.message || `Failed to generate itinerary. Check console for details.`);
         } finally {
             setIsLoading(false);
         }
