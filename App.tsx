@@ -22,12 +22,13 @@ const App: React.FC = () => {
         destCurrency: 'DKK',
         homeCurrency: 'USD',
     });
-    const [userNotes, setUserNotes] = useState('I love architecture, street food, and finding unique photo spots. Not a big fan of crowded tourist traps.');
+    const [userNotes, setUserNotes] = useState('I love architecture, street food, and finding unique photo spots.');
     const [itinerary, setItinerary] = useState<ItineraryItem[]>([]);
     const [accommodations, setAccommodations] = useState<Record<string, Accommodation>>({});
     const [ledger, setLedger] = useState<LedgerEntry[]>([]);
     const [shoppingList, setShoppingList] = useState<ShoppingItem[]>([]);
     const [aiMarkdown, setAiMarkdown] = useState<string>('');
+    const [sources, setSources] = useState<{title: string, uri: string}[]>([]);
 
     const loadState = () => {
       try {
@@ -41,9 +42,10 @@ const App: React.FC = () => {
           setLedger(data.ledger);
           setShoppingList(data.shoppingList);
           setAiMarkdown(data.aiMarkdown);
+          setSources(data.sources || []);
         }
       } catch (error) {
-        console.error("Failed to load state from localStorage", error);
+        console.error("Load state error", error);
       }
     };
     
@@ -57,24 +59,20 @@ const App: React.FC = () => {
               ledger,
               shoppingList,
               aiMarkdown,
+              sources
           };
           localStorage.setItem('globehopper_data_react', JSON.stringify(stateToSave));
       } catch (error) {
-          console.error("Failed to save state to localStorage", error);
+          console.error("Save state error", error);
       }
-    }, [tripDetails, userNotes, itinerary, accommodations, ledger, shoppingList, aiMarkdown]);
+    }, [tripDetails, userNotes, itinerary, accommodations, ledger, shoppingList, aiMarkdown, sources]);
 
-    useEffect(() => {
-        loadState();
-    }, []);
-
-    useEffect(() => {
-        saveState();
-    }, [saveState]);
+    useEffect(() => { loadState(); }, []);
+    useEffect(() => { saveState(); }, [saveState]);
 
     const handleGenerateItinerary = async () => {
         if (!tripDetails.startDate || !tripDetails.endDate || !tripDetails.destinations[0]?.name) {
-            alert("Please fill in the start date, end date, and at least one destination.");
+            alert("Please fill in dates and at least one destination.");
             return;
         }
         setIsLoading(true);
@@ -83,11 +81,12 @@ const App: React.FC = () => {
             if (result) {
                 setAiMarkdown(result.markdown);
                 setItinerary(result.events);
+                setSources(result.sources);
                 setActiveTab('ai-suggestions');
             }
         } catch (error) {
             console.error(error);
-            alert(`Failed to generate itinerary: ${error instanceof Error ? error.message : 'An unknown error occurred'}`);
+            alert(`Failed to generate itinerary. Check console for details.`);
         } finally {
             setIsLoading(false);
         }
@@ -105,7 +104,7 @@ const App: React.FC = () => {
                           isLoading={isLoading}
                           />;
             case 'ai-suggestions':
-                return <SuggestionsTab markdown={aiMarkdown} onBackToHome={() => setActiveTab('home')} />;
+                return <SuggestionsTab markdown={aiMarkdown} sources={sources} onBackToHome={() => setActiveTab('home')} />;
             case 'itinerary':
                 return <ItineraryTab 
                           tripDetails={tripDetails} 
@@ -113,6 +112,7 @@ const App: React.FC = () => {
                           setItinerary={setItinerary}
                           accommodations={accommodations}
                           setAccommodations={setAccommodations}
+                          onGoToHome={() => setActiveTab('home')}
                           />;
             case 'ledger':
                 return <LedgerTab ledger={ledger} setLedger={setLedger} currency={tripDetails.destCurrency} />;
@@ -121,12 +121,12 @@ const App: React.FC = () => {
             default:
                 return null;
         }
-    }, [activeTab, tripDetails, userNotes, isLoading, aiMarkdown, itinerary, accommodations, ledger, shoppingList]);
+    }, [activeTab, tripDetails, userNotes, isLoading, aiMarkdown, itinerary, accommodations, ledger, shoppingList, sources]);
 
     return (
-        <div className="min-h-screen flex flex-col">
+        <div className="min-h-screen flex flex-col max-w-md mx-auto bg-[#FDFBF7]">
             <Header activeTab={activeTab} tripDetails={tripDetails} />
-            <main className="px-6 flex-grow">
+            <main className="px-6 flex-grow pb-24">
                 {tabContent}
             </main>
             <BottomNav tabs={TABS} activeTab={activeTab} setActiveTab={setActiveTab} />

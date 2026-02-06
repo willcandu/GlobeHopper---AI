@@ -1,5 +1,8 @@
+
 {
   "name": "GlobeHopper AI Travel Planner",
   "description": "An AI-powered travel planner to generate, visualize, and manage your trip itineraries. Features day-by-day plans, interactive maps, expense tracking, and more.",
-  "requestFramePermissions": []
+  "requestFramePermissions": [
+    "geolocation"
+  ]
 }

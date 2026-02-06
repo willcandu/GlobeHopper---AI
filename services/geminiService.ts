@@ -1,41 +1,50 @@
-
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI } from "@google/genai";
 import type { TripDetails, ItineraryItem } from "../types";
 
-// Vite uses import.meta.env, while some other environments use process.env
-// This check makes the app more robust for local development
-const API_KEY = (import.meta as any).env?.VITE_GEMINI_API_KEY || process.env.API_KEY;
+// Always initialize with named parameter and process.env.API_KEY
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
-if (!API_KEY) {
-  console.warn("API_KEY not found. Please ensure VITE_GEMINI_API_KEY is set in your .env file.");
+export interface GenerationResult {
+    markdown: string;
+    events: ItineraryItem[];
+    sources: { title: string; uri: string }[];
 }
 
-const ai = new GoogleGenAI({ apiKey: API_KEY || "" });
-
-export async function generateItineraryPlan(details: TripDetails, notes: string): Promise<{ markdown: string; events: ItineraryItem[] }> {
-    const model = "gemini-3-flash-preview";
+/**
+ * Generates a travel itinerary using gemini-3-pro-preview with Google Search grounding.
+ * Note: Grounding tools (search/maps) prohibit the use of responseMimeType and responseSchema.
+ */
+export async function generateItineraryPlan(details: TripDetails, notes: string): Promise<GenerationResult> {
+    // Complex reasoning task: use gemini-3-pro-preview
+    const model = 'gemini-3-pro-preview';
     const destinations = details.destinations.map(d => d.name).join(', ');
     
     const prompt = `
-        You are an expert travel planner with a passion for creating unique and memorable trips.
-        A user is planning a trip to ${destinations} from ${details.startDate} to ${details.endDate}.
-        Their home location is ${details.origin}.
+        You are an elite travel concierge. Generate a comprehensive travel plan for ${destinations} from ${details.startDate} to ${details.endDate}.
+        User's starting point: ${details.origin}.
+        Preferences: "${notes}".
         
-        Their personal preferences are: "${notes}".
+        IMPORTANT: Your response MUST be a single JSON object. Do not include extra text.
         
-        Please generate a detailed travel plan. The response must be a single, valid JSON object that strictly adheres to the provided schema.
+        The JSON structure must be:
+        {
+          "markdown": "A detailed travel guide in Markdown format.",
+          "events": [
+            {
+              "date": "YYYY-MM-DD",
+              "time": "HH:MM",
+              "activity": "Activity name",
+              "location": "Specific location",
+              "lat": 0.0,
+              "lon": 0.0,
+              "mapLink": "Optional Google Maps URL"
+            }
+          ]
+        }
         
-        Your plan should include:
-        1.  A "markdown" field: This should be a well-formatted markdown string that serves as a friendly, readable travel guide. Include headers for each day, bullet points for activities, and useful tips. Infuse the guide with personality and excitement.
-        2.  An "events" field: This must be an array of event objects. Each event represents a specific activity or meal. For each event, you must provide:
-            - "date": The date in YYYY-MM-DD format. This must be within the user's travel dates.
-            - "time": The time in HH:MM (24-hour) format.
-            - "activity": A concise, descriptive name for the activity (e.g., "Visit the Louvre Museum", "Dinner at Noma").
-            - "location": A short, clear name of the location or venue (e.g., "Eiffel Tower", "Tivoli Gardens").
-            - "lat": The geographical latitude as a number. This is crucial for map plotting.
-            - "lon": The geographical longitude as a number. This is crucial for map plotting.
-        
-        Ensure you provide events for every single day of the trip. The latitude and longitude must be accurate for each location.
+        INSTRUCTIONS:
+        1. Use Google Search to find real, current events happening during these dates.
+        2. Provide accurate lat/lon for the map.
     `;
 
     try {
@@ -43,46 +52,45 @@ export async function generateItineraryPlan(details: TripDetails, notes: string)
             model: model,
             contents: prompt,
             config: {
-                responseMimeType: "application/json",
-                responseSchema: {
-                    type: Type.OBJECT,
-                    properties: {
-                        markdown: {
-                            type: Type.STRING,
-                            description: "A comprehensive travel guide formatted in Markdown. It should be engaging and cover the entire trip."
-                        },
-                        events: {
-                            type: Type.ARRAY,
-                            description: "A detailed list of all scheduled events and activities for the trip.",
-                            items: {
-                                type: Type.OBJECT,
-                                properties: {
-                                    date: { type: Type.STRING, description: "Date of the event (YYYY-MM-DD)." },
-                                    time: { type: Type.STRING, description: "Time of the event (HH:MM)." },
-                                    activity: { type: Type.STRING, description: "Name of the activity." },
-                                    location: { type: Type.STRING, description: "Name of the location/venue." },
-                                    lat: { type: Type.NUMBER, description: "Latitude of the location." },
-                                    lon: { type: Type.NUMBER, description: "Longitude of the location." }
-                                },
-                                required: ["date", "time", "activity", "location", "lat", "lon"]
-                            }
-                        }
-                    },
-                    required: ["markdown", "events"]
-                }
+                // When using googleSearch, only googleSearch is permitted as a tool.
+                tools: [{ googleSearch: {} }],
+                // Prohibited to set responseMimeType or responseSchema when using grounding tools.
             }
         });
 
-        const jsonString = response.text;
-        if (!jsonString) {
-            throw new Error("Received an empty response from the AI. Please try a different prompt.");
-        }
+        // Use the .text property (not a method) to get response content.
+        const text = response.text || '';
+        if (!text) throw new Error("Empty AI response");
 
-        const parsedResponse = JSON.parse(jsonString);
-        return parsedResponse;
+        // Grounding responses might not be pure JSON, so we extract it.
+        const jsonMatch = text.match(/\{[\s\S]*\}/);
+        const jsonString = jsonMatch ? jsonMatch[0] : text;
+        
+        let parsed;
+        try {
+            parsed = JSON.parse(jsonString);
+        } catch (e) {
+            console.error("Failed to parse JSON from grounded response:", text);
+            throw new Error("AI response was not in expected JSON format");
+        }
+        
+        // Grounding URLs must always be extracted and displayed.
+        const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
+        const sources = groundingChunks
+            .filter(chunk => chunk.web)
+            .map(chunk => ({
+                title: chunk.web?.title || 'Source',
+                uri: chunk.web?.uri || ''
+            }));
+
+        return {
+            markdown: parsed.markdown || 'No guide generated.',
+            events: parsed.events || [],
+            sources: sources
+        };
 
     } catch (error) {
-        console.error("Error calling Gemini API:", error);
-        throw new Error("Failed to communicate with the AI. Please check your connection and API key setup.");
+        console.error("Gemini Error:", error);
+        throw error;
     }
 }
